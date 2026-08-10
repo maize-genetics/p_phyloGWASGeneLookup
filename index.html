@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Poaceae Gene Lookup — p_phyloGWAS</title>
+<meta name="description" content="Look up a maize, rice, sorghum, or wheat gene against the p_phyloGWAS climate-association, molecular-evolution, and differential-expression results." />
+<link rel="stylesheet" href="static/style.css" />
+</head>
+<body>
+<header class="site-header">
+  <div class="wrap">
+    <h1>Poaceae Gene Lookup</h1>
+    <p class="tagline">Climate association, selection, and expression evidence from
+      <a href="https://github.com/maize-genetics/p_phyloGWAS" target="_blank" rel="noopener">p_phyloGWAS</a>.</p>
+  </div>
+</header>
+
+<main class="wrap">
+  <section class="search-panel">
+    <form id="search-form" autocomplete="off">
+      <label for="gene-input">Gene ID</label>
+      <input id="gene-input" name="gene" type="text" spellcheck="false"
+             placeholder="e.g. Zm00001eb290590, Os05t0477600-01, Sobic.001G047200, TraesCS2B03G0760300" />
+      <button type="submit">Look up</button>
+    </form>
+    <p class="species-note">Accepts maize v5 (Zm00001eb…), rice IRGSP-1.0 (Os…t…), sorghum v3 /
+      Phytozome 454 (Sobic.…), and wheat v2 / IWGSC RefSeq v2.1 (TraesCS…) gene IDs, with or
+      without a transcript suffix. <strong>Sorghum v5 gene IDs are not yet supported</strong> —
+      see the README.</p>
+  </section>
+
+  <section id="result" aria-live="polite"></section>
+</main>
+
+<footer class="site-footer">
+  <div class="wrap">
+    <p>Data snapshot built from
+      <a href="https://github.com/maize-genetics/p_phyloGWAS" target="_blank" rel="noopener">p_phyloGWAS</a>
+      stages 08 (climate association), 09 (RELAX molecular evolution), and 10 (differential
+      expression). See this repo's README for methodology and caveats.</p>
+  </div>
+</footer>
+
+<script src="static/app.js"></script>
+</body>
+</html>
