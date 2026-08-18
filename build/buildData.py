@@ -41,6 +41,10 @@ SPECIES = {
 }
 
 ENV_PCS = ["envPC1", "envPC2", "envPC3"]
+# The stage 08 model has no separate main effects for dNdS/ESM2/plantCad/PMS — they only
+# enter as PAV:x interaction terms (see src/12_runPermulation_perOGModel.R's fullFM), i.e.
+# each modifies the presence/absence effect rather than acting as an independent predictor.
+INTERACTION_TERMS = ["dNdS", "ESM2", "plantCad", "PMS"]
 RELAX_CONDITIONS = ["cold", "warm", "drought", "wet", "sand", "clay"]
 DE_CATEGORIES = ["cold", "heat", "drought", "waterlogging"]
 
@@ -100,7 +104,7 @@ def build(root: Path, out_dir: Path):
             genes_by_og[og][sp] = sorted(set(genes_by_og[og][sp]))
 
     print("Reading stage 08 envPC association results...")
-    og_env = defaultdict(dict)  # OG -> envPCn -> {p, emp_p, direction, coeff}
+    og_env = defaultdict(dict)  # OG -> envPCn -> {p, emp_p, direction, coeff, interactions}
     for i in (1, 2, 3):
         path = root / f"output/finalModels_20251002/envPC_{i}/ASREML_res_empPadded_homologAdded.txt"
         with open(path, newline="") as fh:
@@ -109,11 +113,19 @@ def build(root: Path, out_dir: Path):
             for row in reader:
                 og = row["OG"]
                 coeff = parse_float(row.get("partialCoeff_PAV"))
+                interactions = {
+                    term: {
+                        "coeff": parse_float(row.get(f"partialCoeff_{term}")),
+                        "p": parse_float(row.get(f"partialP_{term}")),
+                    }
+                    for term in INTERACTION_TERMS
+                }
                 og_env[og][f"envPC{i}"] = {
                     "p": parse_float(row.get("p")),
                     "emp_p": parse_float(row.get("emp_p")),
                     "coeff": coeff,
                     "direction": direction_from_coeff(coeff),
+                    "interactions": interactions,
                 }
                 n += 1
         print(f"  envPC{i}: {n} OGs from {path.relative_to(root)}")

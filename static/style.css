@@ -261,6 +261,37 @@ body {
 
 .test-table tr:last-child td { border-bottom: none; }
 
+.test-table.nested {
+  font-size: 0.82rem;
+  margin: 0.3rem 0 0.2rem;
+}
+
+.test-table.nested th, .test-table.nested td { padding: 0.3rem 0.5rem; }
+
+tr.interaction-detail td {
+  background: var(--bg-sunken);
+  padding: 0.5rem 0.6rem;
+}
+
+.int-chip {
+  display: inline-block;
+  font-size: 0.76rem;
+  padding: 0.05rem 0.4rem;
+  border-radius: 5px;
+  background: var(--sig-none-bg);
+  color: var(--text-muted);
+  margin: 0 0.15rem 0.15rem 0;
+  font-variant-numeric: tabular-nums;
+}
+
+.int-chip.sig {
+  background: var(--sig-neg-bg);
+  color: var(--sig-neg);
+  font-weight: 600;
+}
+
+.toggle-btn { margin-left: 0.3rem; font-size: 0.78rem; }
+
 .badge {
   display: inline-block;
   padding: 0.1rem 0.5rem;

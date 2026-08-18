@@ -21,6 +21,16 @@ const RELAX_CONDITIONS = [
   { key: "clay", label: "Clay soil vs. background", gate: "envPC3" },
 ];
 const DE_CATEGORIES = ["cold", "heat", "drought", "waterlogging"];
+// The stage 08 model has no independent main effects for these — each only enters as a
+// PAV:x interaction term, i.e. a modifier of the presence/absence effect, not a separate
+// predictor. A significant interaction means the PAV direction shown above isn't the whole
+// story for that OG.
+const INTERACTION_TERMS = [
+  { key: "dNdS", label: "dN/dS" },
+  { key: "ESM2", label: "ESM2" },
+  { key: "plantCad", label: "PlantCAD" },
+  { key: "PMS", label: "Premature stop" },
+];
 
 let geneIndex = null;
 let ogResults = null;
@@ -72,12 +82,46 @@ function renderGeneIdList(genes) {
   return `<div class="gene-id-list">${items.join("")}</div>`;
 }
 
+function interactionChips(pc, interactions) {
+  if (!interactions) return "—";
+  const chips = INTERACTION_TERMS.map(({ key, label }) => {
+    const t = interactions[key];
+    if (!t || t.p === null || t.p === undefined) {
+      return `<span class="int-chip">${label}: —</span>`;
+    }
+    const sig = t.p < 0.05;
+    return `<span class="int-chip${sig ? " sig" : ""}">${label}: ${fmtP(t.p)}</span>`;
+  }).join(" ");
+  return `${chips} <button type="button" class="link-button toggle-btn" data-toggle="interaction-detail-${pc}">details</button>`;
+}
+
+function renderInteractionDetailRow(pc, interactions) {
+  if (!interactions) return "";
+  const rows = INTERACTION_TERMS.map(({ key, label }) => {
+    const t = interactions[key] || {};
+    return `<tr>
+      <td>PAV &times; ${label}</td>
+      <td>${t.coeff === null || t.coeff === undefined ? "—" : t.coeff.toFixed(4)}</td>
+      <td>${fmtP(t.p)}</td>
+      <td>${sigBadge(t.p)}</td>
+    </tr>`;
+  }).join("");
+  return `<tr class="interaction-detail" id="interaction-detail-${pc}" hidden>
+    <td colspan="6">
+      <table class="test-table nested">
+        <thead><tr><th>Interaction term</th><th>coefficient</th><th>p</th><th></th></tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </td>
+  </tr>`;
+}
+
 function renderEnvAssociation(entry) {
   const env = entry.envAssociation || {};
   const rows = ENV_PCS.map((pc) => {
     const r = env[pc];
     if (!r) {
-      return `<tr><td>${pc}</td><td colspan="4" class="gated-note">not tested — this OG was excluded from the stage 08 association test (e.g. too few informative taxa)</td></tr>`;
+      return `<tr><td>${pc}</td><td colspan="5" class="gated-note">not tested — this OG was excluded from the stage 08 association test (e.g. too few informative taxa)</td></tr>`;
     }
     const displayP = r.emp_p !== null && r.emp_p !== undefined ? r.emp_p : r.p;
     return `<tr>
@@ -86,14 +130,22 @@ function renderEnvAssociation(entry) {
       <td>${r.emp_p === null || r.emp_p === undefined ? "—" : fmtP(r.emp_p)}</td>
       <td>${sigBadge(displayP)}</td>
       <td>${directionFromCoeffSign(r.direction)}</td>
-    </tr>`;
+      <td>${interactionChips(pc, r.interactions)}</td>
+    </tr>${renderInteractionDetailRow(pc, r.interactions)}`;
   }).join("");
   return `<div class="result-section">
     <h3>Climate association (stage 08)</h3>
-    <table class="test-table">
-      <thead><tr><th>Trait</th><th>p</th><th>empirical p</th><th></th><th>direction of gene presence</th></tr></thead>
-      <tbody>${rows}</tbody>
-    </table>
+    <p class="gated-note" style="margin-top:0">"Direction of gene presence" is the PAV main effect only.
+      dN/dS, ESM2, PlantCAD, and premature-stop status aren't independent predictors in this model — each
+      is a PAV interaction term, i.e. a modifier of the presence/absence effect. A significant interaction
+      (highlighted below) means the true effect of presence/absence depends on that protein-level feature,
+      not just the plain direction shown.</p>
+    <div class="table-scroll">
+      <table class="test-table">
+        <thead><tr><th>Trait</th><th>p</th><th>empirical p</th><th></th><th>direction of gene presence</th><th>PAV &times; feature interactions</th></tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>
   </div>`;
 }
 
@@ -163,6 +215,12 @@ function renderResultCard(og) {
       ${renderDeEvidence(entry)}
     </div>`;
   document.getElementById("back-to-list-btn").addEventListener("click", renderCandidateList);
+  resultEl.querySelectorAll(".toggle-btn[data-toggle]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const target = document.getElementById(btn.dataset.toggle);
+      if (target) target.hidden = !target.hidden;
+    });
+  });
 }
 
 function renderCandidateList() {
@@ -201,7 +259,7 @@ function renderCandidateList() {
         climate-association test, with supporting RELAX and DE evidence. Click an OG for full details.</p>
       <div class="table-scroll">
         <table class="test-table">
-          <thead><tr><th>OG</th><th>Trait</th><th>Maize ID</th><th>Rice ID</th><th>phylo p</th><th>DE evidence</th></tr></thead>
+          <thead><tr><th>OG</th><th>Trait</th><th>Maize ID</th><th>Rice ID</th><th>phylo-association p-value</th><th>DE evidence</th></tr></thead>
           <tbody>${body}</tbody>
         </table>
       </div>
