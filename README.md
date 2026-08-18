@@ -7,8 +7,7 @@ variables, show signatures of selection under those conditions, and have support
 expression evidence.
 
 Paste in a gene ID and see, for its orthogroup:
-- whether gene presence/absence is significantly associated with any of three climate PCs, and
-  which direction the association runs (stage 08);
+- whether gene presence/absence is significantly associated with any of three climate PCs (stage 08);
 - whether the orthogroup shows relaxed or intensified selection under cold/warm conditions
   genome-wide, or under drought/wet/sand/clay conditions if it was already a climate-association
   candidate (stage 09, RELAX);

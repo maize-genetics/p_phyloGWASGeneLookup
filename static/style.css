@@ -261,49 +261,22 @@ body {
 
 .test-table tr:last-child td { border-bottom: none; }
 
-.test-table.nested {
-  font-size: 0.82rem;
-  margin: 0.3rem 0 0.2rem;
+.envpc-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
 }
 
-.test-table.nested th, .test-table.nested td { padding: 0.3rem 0.5rem; }
-
-.envpc-row {
-  padding: 0.8rem 0;
-  border-bottom: 1px solid var(--border);
-}
-
-.envpc-row:last-child { border-bottom: none; padding-bottom: 0; }
-
-.envpc-head {
+.envpc-simple {
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  flex-wrap: wrap;
+  padding: 0.4rem 0.7rem;
+  border: 1px solid var(--border);
+  border-radius: 7px;
 }
 
-.envpc-head strong { font-size: 0.95rem; }
-
-.stat-note {
-  font-size: 0.8rem;
-  color: var(--text-muted);
-  font-variant-numeric: tabular-nums;
-}
-
-.interpretation {
-  margin: 0.45rem 0 0.4rem;
-  font-size: 0.9rem;
-  line-height: 1.45;
-}
-
-.interaction-detail {
-  margin-top: 0.4rem;
-  padding: 0.5rem 0.6rem;
-  background: var(--bg-sunken);
-  border-radius: 6px;
-}
-
-.toggle-btn { font-size: 0.78rem; }
+.envpc-label { font-weight: 600; font-size: 0.9rem; }
 
 .badge {
   display: inline-block;

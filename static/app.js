@@ -21,16 +21,6 @@ const RELAX_CONDITIONS = [
   { key: "clay", label: "Clay soil vs. background", gate: "envPC3" },
 ];
 const DE_CATEGORIES = ["cold", "heat", "drought", "waterlogging"];
-// The stage 08 model has no independent main effects for these — each only enters as a
-// PAV:x interaction term, i.e. a modifier of the presence/absence effect, not a separate
-// predictor. A significant interaction means the PAV direction shown above isn't the whole
-// story for that OG.
-const INTERACTION_TERMS = [
-  { key: "dNdS", label: "dN/dS" },
-  { key: "ESM2", label: "ESM2" },
-  { key: "plantCad", label: "PlantCAD" },
-  { key: "PMS", label: "Premature stop" },
-];
 
 let geneIndex = null;
 let ogResults = null;
@@ -60,12 +50,6 @@ function sigBadge(p) {
     : '<span class="badge notsig">not significant</span>';
 }
 
-function directionFromCoeffSign(direction) {
-  if (direction === "+") return '<span class="direction up">&#9650; higher</span>';
-  if (direction === "-") return '<span class="direction down">&#9660; lower</span>';
-  return '<span class="direction none">—</span>';
-}
-
 function directionFromK(k) {
   if (k === null || k === undefined) return '<span class="direction none">—</span>';
   if (k < 1) return '<span class="direction down">&#9660; relaxed</span>';
@@ -82,91 +66,19 @@ function renderGeneIdList(genes) {
   return `<div class="gene-id-list">${items.join("")}</div>`;
 }
 
-// Builds a plain-language summary of what this OG's climate-association result actually
-// means, since the raw PAV coefficient alone can be misleading (see interpretEnvAssociation
-// notes below and the model formula in build/README.md).
-function interpretEnvAssociation(pc, r) {
-  const displayP = r.emp_p !== null && r.emp_p !== undefined ? r.emp_p : r.p;
-  if (displayP === null || displayP === undefined || displayP >= 0.05) {
-    return `No significant association with ${pc} detected for this orthogroup.`;
-  }
-
-  const dirWord = r.direction === "+" ? "higher" : r.direction === "-" ? "lower" : null;
-  const mainSig = r.coeffP !== null && r.coeffP !== undefined && r.coeffP < 0.05;
-  const sigInteractions = INTERACTION_TERMS
-    .map(({ key, label }) => ({ key, label, ...((r.interactions && r.interactions[key]) || {}) }))
-    .filter((t) => t.p !== null && t.p !== undefined && t.p < 0.05 && t.coeff !== null && t.coeff !== undefined);
-
-  const clauseFor = (t) => {
-    if (r.coeff === null || r.coeff === undefined) return `${t.label} (p = ${fmtP(t.p)})`;
-    const reinforcing = Math.sign(t.coeff) === Math.sign(r.coeff);
-    const verb = reinforcing ? "strengthens" : "weakens";
-    if (t.key === "PMS") return `a premature stop in the present copy ${verb} that effect`;
-    return `a higher-than-average ${t.label} score ${verb} that effect`;
-  };
-
-  if (!dirWord) {
-    return sigInteractions.length
-      ? `The overall model is significant, but the plain presence/absence direction couldn't be estimated for this OG. The significant driver${sigInteractions.length > 1 ? "s are" : " is"} ${sigInteractions.map(clauseFor).join(" and ")}.`
-      : `Significant overall association with ${pc}, but no single term reaches significance on its own.`;
-  }
-  if (mainSig && sigInteractions.length === 0) {
-    return `Gene presence is significantly associated with ${dirWord} ${pc} on its own, independent of dN/dS, ESM2, PlantCAD, or premature-stop status.`;
-  }
-  if (mainSig && sigInteractions.length > 0) {
-    return `Gene presence is significantly associated with ${dirWord} ${pc}, and this effect is further modulated: ${sigInteractions.map(clauseFor).join("; ")}.`;
-  }
-  if (!mainSig && sigInteractions.length > 0) {
-    return `Presence/absence alone isn't a significant predictor here (p = ${fmtP(r.coeffP)}) — the significant association with ${pc} comes mainly from how it interacts with sequence-quality features: ${sigInteractions.map(clauseFor).join("; ")}.`;
-  }
-  return `The overall model is significant, but no single term (presence, dN/dS, ESM2, PlantCAD, or premature-stop) reaches significance on its own — this may reflect a combination of small effects rather than one dominant driver.`;
-}
-
-function renderInteractionDetail(pc, interactions) {
-  const rows = INTERACTION_TERMS.map(({ key, label }) => {
-    const t = (interactions && interactions[key]) || {};
-    return `<tr>
-      <td>PAV &times; ${label}</td>
-      <td>${t.coeff === null || t.coeff === undefined ? "—" : t.coeff.toFixed(4)}</td>
-      <td>${fmtP(t.p)}</td>
-      <td>${sigBadge(t.p)}</td>
-    </tr>`;
-  }).join("");
-  return `<div class="interaction-detail" id="interaction-detail-${pc}" hidden>
-    <table class="test-table nested">
-      <thead><tr><th>Interaction term</th><th>coefficient</th><th>p</th><th></th></tr></thead>
-      <tbody>${rows}</tbody>
-    </table>
-  </div>`;
-}
-
 function renderEnvAssociation(entry) {
   const env = entry.envAssociation || {};
-  const blocks = ENV_PCS.map((pc) => {
+  const rows = ENV_PCS.map((pc) => {
     const r = env[pc];
     if (!r) {
-      return `<div class="envpc-row">
-        <div class="envpc-head"><strong>${pc}</strong></div>
-        <p class="gated-note" style="margin:0.3rem 0 0">not tested — this OG was excluded from the stage 08 association test (e.g. too few informative taxa)</p>
-      </div>`;
+      return `<div class="envpc-simple"><span class="envpc-label">${pc}</span><span class="gated-note">not tested</span></div>`;
     }
     const displayP = r.emp_p !== null && r.emp_p !== undefined ? r.emp_p : r.p;
-    const empStat = r.emp_p === null || r.emp_p === undefined ? "" : `, empirical p = ${fmtP(r.emp_p)}`;
-    return `<div class="envpc-row">
-      <div class="envpc-head">
-        <strong>${pc}</strong>
-        ${sigBadge(displayP)}
-        ${directionFromCoeffSign(r.direction)}
-        <span class="stat-note">p = ${fmtP(r.p)}${empStat}</span>
-      </div>
-      <p class="interpretation">${escapeHtml(interpretEnvAssociation(pc, r))}</p>
-      <button type="button" class="link-button toggle-btn" data-toggle="interaction-detail-${pc}">Show interaction details</button>
-      ${renderInteractionDetail(pc, r.interactions)}
-    </div>`;
+    return `<div class="envpc-simple"><span class="envpc-label">${pc}</span>${sigBadge(displayP)}</div>`;
   }).join("");
   return `<div class="result-section">
     <h3>Climate association (stage 08)</h3>
-    ${blocks}
+    <div class="envpc-list">${rows}</div>
   </div>`;
 }
 
@@ -236,12 +148,6 @@ function renderResultCard(og) {
       ${renderDeEvidence(entry)}
     </div>`;
   document.getElementById("back-to-list-btn").addEventListener("click", renderCandidateList);
-  resultEl.querySelectorAll(".toggle-btn[data-toggle]").forEach((btn) => {
-    btn.addEventListener("click", () => {
-      const target = document.getElementById(btn.dataset.toggle);
-      if (target) target.hidden = !target.hidden;
-    });
-  });
 }
 
 function renderCandidateList() {
