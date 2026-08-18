@@ -82,23 +82,49 @@ function renderGeneIdList(genes) {
   return `<div class="gene-id-list">${items.join("")}</div>`;
 }
 
-function interactionChips(pc, interactions) {
-  if (!interactions) return "—";
-  const chips = INTERACTION_TERMS.map(({ key, label }) => {
-    const t = interactions[key];
-    if (!t || t.p === null || t.p === undefined) {
-      return `<span class="int-chip">${label}: —</span>`;
-    }
-    const sig = t.p < 0.05;
-    return `<span class="int-chip${sig ? " sig" : ""}">${label}: ${fmtP(t.p)}</span>`;
-  }).join(" ");
-  return `${chips} <button type="button" class="link-button toggle-btn" data-toggle="interaction-detail-${pc}">details</button>`;
+// Builds a plain-language summary of what this OG's climate-association result actually
+// means, since the raw PAV coefficient alone can be misleading (see interpretEnvAssociation
+// notes below and the model formula in build/README.md).
+function interpretEnvAssociation(pc, r) {
+  const displayP = r.emp_p !== null && r.emp_p !== undefined ? r.emp_p : r.p;
+  if (displayP === null || displayP === undefined || displayP >= 0.05) {
+    return `No significant association with ${pc} detected for this orthogroup.`;
+  }
+
+  const dirWord = r.direction === "+" ? "higher" : r.direction === "-" ? "lower" : null;
+  const mainSig = r.coeffP !== null && r.coeffP !== undefined && r.coeffP < 0.05;
+  const sigInteractions = INTERACTION_TERMS
+    .map(({ key, label }) => ({ key, label, ...((r.interactions && r.interactions[key]) || {}) }))
+    .filter((t) => t.p !== null && t.p !== undefined && t.p < 0.05 && t.coeff !== null && t.coeff !== undefined);
+
+  const clauseFor = (t) => {
+    if (r.coeff === null || r.coeff === undefined) return `${t.label} (p = ${fmtP(t.p)})`;
+    const reinforcing = Math.sign(t.coeff) === Math.sign(r.coeff);
+    const verb = reinforcing ? "strengthens" : "weakens";
+    if (t.key === "PMS") return `a premature stop in the present copy ${verb} that effect`;
+    return `a higher-than-average ${t.label} score ${verb} that effect`;
+  };
+
+  if (!dirWord) {
+    return sigInteractions.length
+      ? `The overall model is significant, but the plain presence/absence direction couldn't be estimated for this OG. The significant driver${sigInteractions.length > 1 ? "s are" : " is"} ${sigInteractions.map(clauseFor).join(" and ")}.`
+      : `Significant overall association with ${pc}, but no single term reaches significance on its own.`;
+  }
+  if (mainSig && sigInteractions.length === 0) {
+    return `Gene presence is significantly associated with ${dirWord} ${pc} on its own, independent of dN/dS, ESM2, PlantCAD, or premature-stop status.`;
+  }
+  if (mainSig && sigInteractions.length > 0) {
+    return `Gene presence is significantly associated with ${dirWord} ${pc}, and this effect is further modulated: ${sigInteractions.map(clauseFor).join("; ")}.`;
+  }
+  if (!mainSig && sigInteractions.length > 0) {
+    return `Presence/absence alone isn't a significant predictor here (p = ${fmtP(r.coeffP)}) — the significant association with ${pc} comes mainly from how it interacts with sequence-quality features: ${sigInteractions.map(clauseFor).join("; ")}.`;
+  }
+  return `The overall model is significant, but no single term (presence, dN/dS, ESM2, PlantCAD, or premature-stop) reaches significance on its own — this may reflect a combination of small effects rather than one dominant driver.`;
 }
 
-function renderInteractionDetailRow(pc, interactions) {
-  if (!interactions) return "";
+function renderInteractionDetail(pc, interactions) {
   const rows = INTERACTION_TERMS.map(({ key, label }) => {
-    const t = interactions[key] || {};
+    const t = (interactions && interactions[key]) || {};
     return `<tr>
       <td>PAV &times; ${label}</td>
       <td>${t.coeff === null || t.coeff === undefined ? "—" : t.coeff.toFixed(4)}</td>
@@ -106,46 +132,41 @@ function renderInteractionDetailRow(pc, interactions) {
       <td>${sigBadge(t.p)}</td>
     </tr>`;
   }).join("");
-  return `<tr class="interaction-detail" id="interaction-detail-${pc}" hidden>
-    <td colspan="6">
-      <table class="test-table nested">
-        <thead><tr><th>Interaction term</th><th>coefficient</th><th>p</th><th></th></tr></thead>
-        <tbody>${rows}</tbody>
-      </table>
-    </td>
-  </tr>`;
+  return `<div class="interaction-detail" id="interaction-detail-${pc}" hidden>
+    <table class="test-table nested">
+      <thead><tr><th>Interaction term</th><th>coefficient</th><th>p</th><th></th></tr></thead>
+      <tbody>${rows}</tbody>
+    </table>
+  </div>`;
 }
 
 function renderEnvAssociation(entry) {
   const env = entry.envAssociation || {};
-  const rows = ENV_PCS.map((pc) => {
+  const blocks = ENV_PCS.map((pc) => {
     const r = env[pc];
     if (!r) {
-      return `<tr><td>${pc}</td><td colspan="5" class="gated-note">not tested — this OG was excluded from the stage 08 association test (e.g. too few informative taxa)</td></tr>`;
+      return `<div class="envpc-row">
+        <div class="envpc-head"><strong>${pc}</strong></div>
+        <p class="gated-note" style="margin:0.3rem 0 0">not tested — this OG was excluded from the stage 08 association test (e.g. too few informative taxa)</p>
+      </div>`;
     }
     const displayP = r.emp_p !== null && r.emp_p !== undefined ? r.emp_p : r.p;
-    return `<tr>
-      <td>${pc}</td>
-      <td>${fmtP(r.p)}</td>
-      <td>${r.emp_p === null || r.emp_p === undefined ? "—" : fmtP(r.emp_p)}</td>
-      <td>${sigBadge(displayP)}</td>
-      <td>${directionFromCoeffSign(r.direction)}</td>
-      <td>${interactionChips(pc, r.interactions)}</td>
-    </tr>${renderInteractionDetailRow(pc, r.interactions)}`;
+    const empStat = r.emp_p === null || r.emp_p === undefined ? "" : `, empirical p = ${fmtP(r.emp_p)}`;
+    return `<div class="envpc-row">
+      <div class="envpc-head">
+        <strong>${pc}</strong>
+        ${sigBadge(displayP)}
+        ${directionFromCoeffSign(r.direction)}
+        <span class="stat-note">p = ${fmtP(r.p)}${empStat}</span>
+      </div>
+      <p class="interpretation">${escapeHtml(interpretEnvAssociation(pc, r))}</p>
+      <button type="button" class="link-button toggle-btn" data-toggle="interaction-detail-${pc}">Show interaction details</button>
+      ${renderInteractionDetail(pc, r.interactions)}
+    </div>`;
   }).join("");
   return `<div class="result-section">
     <h3>Climate association (stage 08)</h3>
-    <p class="gated-note" style="margin-top:0">"Direction of gene presence" is the PAV main effect only.
-      dN/dS, ESM2, PlantCAD, and premature-stop status aren't independent predictors in this model — each
-      is a PAV interaction term, i.e. a modifier of the presence/absence effect. A significant interaction
-      (highlighted below) means the true effect of presence/absence depends on that protein-level feature,
-      not just the plain direction shown.</p>
-    <div class="table-scroll">
-      <table class="test-table">
-        <thead><tr><th>Trait</th><th>p</th><th>empirical p</th><th></th><th>direction of gene presence</th><th>PAV &times; feature interactions</th></tr></thead>
-        <tbody>${rows}</tbody>
-      </table>
-    </div>
+    ${blocks}
   </div>`;
 }
 

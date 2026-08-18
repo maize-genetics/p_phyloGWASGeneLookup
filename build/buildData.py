@@ -124,6 +124,7 @@ def build(root: Path, out_dir: Path):
                     "p": parse_float(row.get("p")),
                     "emp_p": parse_float(row.get("emp_p")),
                     "coeff": coeff,
+                    "coeffP": parse_float(row.get("partialP_PAV")),
                     "direction": direction_from_coeff(coeff),
                     "interactions": interactions,
                 }

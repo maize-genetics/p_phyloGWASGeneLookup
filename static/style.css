@@ -268,29 +268,42 @@ body {
 
 .test-table.nested th, .test-table.nested td { padding: 0.3rem 0.5rem; }
 
-tr.interaction-detail td {
-  background: var(--bg-sunken);
-  padding: 0.5rem 0.6rem;
+.envpc-row {
+  padding: 0.8rem 0;
+  border-bottom: 1px solid var(--border);
 }
 
-.int-chip {
-  display: inline-block;
-  font-size: 0.76rem;
-  padding: 0.05rem 0.4rem;
-  border-radius: 5px;
-  background: var(--sig-none-bg);
+.envpc-row:last-child { border-bottom: none; padding-bottom: 0; }
+
+.envpc-head {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.envpc-head strong { font-size: 0.95rem; }
+
+.stat-note {
+  font-size: 0.8rem;
   color: var(--text-muted);
-  margin: 0 0.15rem 0.15rem 0;
   font-variant-numeric: tabular-nums;
 }
 
-.int-chip.sig {
-  background: var(--sig-neg-bg);
-  color: var(--sig-neg);
-  font-weight: 600;
+.interpretation {
+  margin: 0.45rem 0 0.4rem;
+  font-size: 0.9rem;
+  line-height: 1.45;
 }
 
-.toggle-btn { margin-left: 0.3rem; font-size: 0.78rem; }
+.interaction-detail {
+  margin-top: 0.4rem;
+  padding: 0.5rem 0.6rem;
+  background: var(--bg-sunken);
+  border-radius: 6px;
+}
+
+.toggle-btn { font-size: 0.78rem; }
 
 .badge {
   display: inline-block;
