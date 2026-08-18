@@ -30,7 +30,15 @@
       see the README.</p>
     <p class="browse-all">
       <button type="button" id="browse-candidates-btn" class="link-button">Browse all 27 high-confidence candidates &rarr;</button>
+      &nbsp;&middot;&nbsp;
+      <button type="button" id="batch-toggle-btn" class="link-button">Search multiple genes at once &rarr;</button>
     </p>
+    <div id="batch-panel" class="batch-panel" hidden>
+      <label for="batch-input">Gene IDs (one per line, or separated by commas/spaces)</label>
+      <textarea id="batch-input" rows="5" spellcheck="false"
+                placeholder="Zm00001eb290590&#10;Os05t0477600-01&#10;Sobic.001G047200"></textarea>
+      <button type="button" id="batch-submit-btn">Search all</button>
+    </div>
   </section>
 
   <section id="result" aria-live="polite"></section>

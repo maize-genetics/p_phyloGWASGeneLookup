@@ -24,11 +24,18 @@ const DE_CATEGORIES = ["cold", "heat", "drought", "waterlogging"];
 
 let geneIndex = null;
 let ogResults = null;
+// What "back" returns to from a single OG detail view — null when there's nothing to go
+// back to (e.g. arrived via a direct single-gene search).
+let backTarget = null;
 
 const resultEl = document.getElementById("result");
 const form = document.getElementById("search-form");
 const input = document.getElementById("gene-input");
 const browseBtn = document.getElementById("browse-candidates-btn");
+const batchToggleBtn = document.getElementById("batch-toggle-btn");
+const batchPanel = document.getElementById("batch-panel");
+const batchInput = document.getElementById("batch-input");
+const batchSubmitBtn = document.getElementById("batch-submit-btn");
 
 function escapeHtml(s) {
   return String(s).replace(/[&<>"']/g, (c) => ({
@@ -138,16 +145,21 @@ function renderResultCard(og) {
   const badge = highconf
     ? `<span class="highconf-badge">High-confidence candidate — ${escapeHtml(highconf.envPC)}</span>`
     : "";
+  const backLink = backTarget
+    ? `<p class="back-link"><button type="button" class="link-button" id="back-to-list-btn">&larr; Back to results</button></p>`
+    : "";
   resultEl.innerHTML = `
     <div class="result-card">
-      <p class="back-link"><button type="button" class="link-button" id="back-to-list-btn">&larr; All high-confidence candidates</button></p>
+      ${backLink}
       <h2>${og}${badge}</h2>
       ${renderGeneIdList(entry.genes)}
       ${renderEnvAssociation(entry)}
       ${renderMolecularEvolution(entry)}
       ${renderDeEvidence(entry)}
     </div>`;
-  document.getElementById("back-to-list-btn").addEventListener("click", renderCandidateList);
+  if (backTarget) {
+    document.getElementById("back-to-list-btn").addEventListener("click", () => backTarget());
+  }
 }
 
 function renderCandidateList() {
@@ -192,7 +204,10 @@ function renderCandidateList() {
       </div>
     </div>`;
   resultEl.querySelectorAll("button[data-og]").forEach((btn) => {
-    btn.addEventListener("click", () => renderResultCard(btn.dataset.og));
+    btn.addEventListener("click", () => {
+      backTarget = renderCandidateList;
+      renderResultCard(btn.dataset.og);
+    });
   });
 }
 
@@ -214,36 +229,98 @@ function showMessage(html, isError) {
   resultEl.innerHTML = `<div class="state-message${isError ? " error" : ""}">${html}</div>`;
 }
 
+// Shared by single and batch search: normalizes one raw ID and classifies it as
+// empty / unrecognized (doesn't look like any supported species' ID) / not_found
+// (plausible format, no match) / found (with its resolved OG(s)).
+function resolveGeneId(rawValue) {
+  const value = rawValue.trim();
+  if (!value) return { status: "empty", value };
+  const matches = geneIndex[value.toLowerCase()];
+  if (!matches || matches.length === 0) {
+    const looksValid = SPECIES_FORMAT_HINTS.some((f) => f.re.test(value));
+    return { status: looksValid ? "not_found" : "unrecognized", value };
+  }
+  return { status: "found", value, matches, uniqueOGs: [...new Set(matches.map((m) => m.og))] };
+}
+
 function lookup(rawInput) {
-  const value = rawInput.trim();
-  if (!value) {
+  const r = resolveGeneId(rawInput);
+  if (r.status === "empty") {
     showMessage("Enter a gene ID to look it up.");
     return;
   }
-  const key = value.toLowerCase();
-  const matches = geneIndex[key];
-  if (!matches || matches.length === 0) {
-    const looksValid = SPECIES_FORMAT_HINTS.some((f) => f.re.test(value));
-    if (!looksValid) {
-      const examples = SPECIES_FORMAT_HINTS.map((f) => f.label).join(", ");
-      showMessage(
-        `“${escapeHtml(value)}” doesn't look like a maize v5, rice IRGSP-1.0, sorghum v3, or wheat v2 gene ID. Supported formats: ${examples}.`,
-        true
-      );
-    } else {
-      showMessage(
-        `No match for “${escapeHtml(value)}”. Check the ID and annotation version — this tool doesn't (yet) translate between gene ID versions.`,
-        true
-      );
-    }
+  if (r.status === "unrecognized") {
+    const examples = SPECIES_FORMAT_HINTS.map((f) => f.label).join(", ");
+    showMessage(
+      `“${escapeHtml(r.value)}” doesn't look like a maize v5, rice IRGSP-1.0, sorghum v3, or wheat v2 gene ID. Supported formats: ${examples}.`,
+      true
+    );
     return;
   }
-  const uniqueOGs = [...new Set(matches.map((m) => m.og))];
-  if (uniqueOGs.length === 1) {
-    renderResultCard(uniqueOGs[0]);
-  } else {
-    renderMatchPicker(matches);
+  if (r.status === "not_found") {
+    showMessage(
+      `No match for “${escapeHtml(r.value)}”. Check the ID and annotation version — this tool doesn't (yet) translate between gene ID versions.`,
+      true
+    );
+    return;
   }
+  backTarget = null;
+  if (r.uniqueOGs.length === 1) {
+    renderResultCard(r.uniqueOGs[0]);
+  } else {
+    renderMatchPicker(r.matches);
+  }
+}
+
+function renderBatchResults(rawText) {
+  const rawIds = rawText.split(/[\s,;]+/).map((s) => s.trim()).filter(Boolean);
+  if (!rawIds.length) {
+    showMessage("Paste one or more gene IDs (one per line, or separated by commas/spaces).");
+    return;
+  }
+
+  const envCell = (env, pc) => {
+    const e = env[pc];
+    if (!e) return '<span class="badge notsig">not tested</span>';
+    return sigBadge(e.emp_p !== null && e.emp_p !== undefined ? e.emp_p : e.p);
+  };
+
+  const rows = rawIds.map((raw) => {
+    const r = resolveGeneId(raw);
+    if (r.status !== "found") {
+      const note = r.status === "unrecognized" ? "unrecognized format" : "no match";
+      return `<tr><td class="mono">${escapeHtml(raw)}</td><td colspan="4" class="gated-note">${note}</td></tr>`;
+    }
+    return r.uniqueOGs.map((og) => {
+      const env = (ogResults[og] && ogResults[og].envAssociation) || {};
+      return `<tr>
+        <td class="mono">${escapeHtml(raw)}</td>
+        <td><button type="button" class="link-button" data-og="${escapeHtml(og)}">${escapeHtml(og)}</button></td>
+        <td>${envCell(env, "envPC1")}</td>
+        <td>${envCell(env, "envPC2")}</td>
+        <td>${envCell(env, "envPC3")}</td>
+      </tr>`;
+    }).join("");
+  }).join("");
+
+  resultEl.innerHTML = `
+    <div class="result-card">
+      <h2>Batch search results <span class="highconf-badge">${rawIds.length}</span></h2>
+      <p class="gated-note" style="margin-top:0">Climate-association significance per envPC. Click an OG for full details
+        (RELAX and DE evidence included).</p>
+      <div class="table-scroll">
+        <table class="test-table">
+          <thead><tr><th>Gene ID (as entered)</th><th>OG</th><th>envPC1</th><th>envPC2</th><th>envPC3</th></tr></thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>
+    </div>`;
+  resultEl.querySelectorAll("button[data-og]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      backTarget = () => renderBatchResults(rawText);
+      renderResultCard(btn.dataset.og);
+    });
+  });
 }
 
 async function loadData() {
@@ -272,6 +349,18 @@ browseBtn.addEventListener("click", () => {
     return;
   }
   renderCandidateList();
+});
+
+batchToggleBtn.addEventListener("click", () => {
+  batchPanel.hidden = !batchPanel.hidden;
+});
+
+batchSubmitBtn.addEventListener("click", () => {
+  if (!geneIndex) {
+    showMessage("Still loading gene data — try again in a moment.", true);
+    return;
+  }
+  renderBatchResults(batchInput.value);
 });
 
 loadData().catch((err) => {
