@@ -16,7 +16,7 @@ Paste in a gene ID and see, for its orthogroup:
   waterlogging stress across independent studies (stage 10).
 
 No installation needed — this is a plain static site. See it live at:
-`<GitHub Pages URL — added once published>`
+https://maize-genetics.github.io/p_phyloGWASGeneLookup/
 
 ## Supported gene ID formats
 
