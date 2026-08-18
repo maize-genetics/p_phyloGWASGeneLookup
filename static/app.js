@@ -28,6 +28,7 @@ let ogResults = null;
 const resultEl = document.getElementById("result");
 const form = document.getElementById("search-form");
 const input = document.getElementById("gene-input");
+const browseBtn = document.getElementById("browse-candidates-btn");
 
 function escapeHtml(s) {
   return String(s).replace(/[&<>"']/g, (c) => ({
@@ -154,12 +155,60 @@ function renderResultCard(og) {
     : "";
   resultEl.innerHTML = `
     <div class="result-card">
+      <p class="back-link"><button type="button" class="link-button" id="back-to-list-btn">&larr; All high-confidence candidates</button></p>
       <h2>${og}${badge}</h2>
       ${renderGeneIdList(entry.genes)}
       ${renderEnvAssociation(entry)}
       ${renderMolecularEvolution(entry)}
       ${renderDeEvidence(entry)}
     </div>`;
+  document.getElementById("back-to-list-btn").addEventListener("click", renderCandidateList);
+}
+
+function renderCandidateList() {
+  const rows = Object.entries(ogResults)
+    .filter(([, entry]) => entry.highConfidenceCandidate)
+    .map(([og, entry]) => ({ og, entry }))
+    .sort((a, b) => {
+      const pcA = a.entry.highConfidenceCandidate.envPC;
+      const pcB = b.entry.highConfidenceCandidate.envPC;
+      if (pcA !== pcB) return pcA.localeCompare(pcB);
+      const pA = (a.entry.envAssociation && a.entry.envAssociation[pcA] && a.entry.envAssociation[pcA].p);
+      const pB = (b.entry.envAssociation && b.entry.envAssociation[pcB] && b.entry.envAssociation[pcB].p);
+      return (pA ?? 1) - (pB ?? 1);
+    });
+
+  const body = rows.map(({ og, entry }) => {
+    const hc = entry.highConfidenceCandidate;
+    const env = (entry.envAssociation && entry.envAssociation[hc.envPC]) || {};
+    const maize = ((entry.genes && entry.genes.maize_v5) || []).join(", ") || "—";
+    const rice = ((entry.genes && entry.genes["rice_IRGSP1.0"]) || []).join(", ") || "—";
+    const de = hc.aprioriDEConditions.length ? hc.aprioriDEConditions.join(", ") : "—";
+    return `<tr>
+      <td><button type="button" class="link-button" data-og="${escapeHtml(og)}">${escapeHtml(og)}</button></td>
+      <td>${escapeHtml(hc.envPC)}</td>
+      <td class="mono">${escapeHtml(maize)}</td>
+      <td class="mono">${escapeHtml(rice)}</td>
+      <td>${fmtP(env.p)}</td>
+      <td>${escapeHtml(de)}</td>
+    </tr>`;
+  }).join("");
+
+  resultEl.innerHTML = `
+    <div class="result-card">
+      <h2>All high-confidence candidates <span class="highconf-badge">${rows.length}</span></h2>
+      <p class="gated-note" style="margin-top:0">The paper's headline orthogroups — significant in the stage 08
+        climate-association test, with supporting RELAX and DE evidence. Click an OG for full details.</p>
+      <div class="table-scroll">
+        <table class="test-table">
+          <thead><tr><th>OG</th><th>Trait</th><th>Maize ID</th><th>Rice ID</th><th>phylo p</th><th>DE evidence</th></tr></thead>
+          <tbody>${body}</tbody>
+        </table>
+      </div>
+    </div>`;
+  resultEl.querySelectorAll("button[data-og]").forEach((btn) => {
+    btn.addEventListener("click", () => renderResultCard(btn.dataset.og));
+  });
 }
 
 function renderMatchPicker(matches) {
@@ -230,6 +279,14 @@ form.addEventListener("submit", (e) => {
     return;
   }
   lookup(input.value);
+});
+
+browseBtn.addEventListener("click", () => {
+  if (!ogResults) {
+    showMessage("Still loading gene data — try again in a moment.", true);
+    return;
+  }
+  renderCandidateList();
 });
 
 loadData().catch((err) => {
