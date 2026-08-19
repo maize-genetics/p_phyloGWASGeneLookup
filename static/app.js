@@ -81,7 +81,12 @@ function renderEnvAssociation(entry) {
       return `<div class="envpc-simple"><span class="envpc-label">${pc}</span><span class="gated-note">not tested</span></div>`;
     }
     const displayP = r.emp_p !== null && r.emp_p !== undefined ? r.emp_p : r.p;
-    return `<div class="envpc-simple"><span class="envpc-label">${pc}</span>${sigBadge(displayP)}</div>`;
+    const empPart = r.emp_p === null || r.emp_p === undefined ? "" : `, empirical p = ${fmtP(r.emp_p)}`;
+    return `<div class="envpc-simple">
+      <span class="envpc-label">${pc}</span>
+      ${sigBadge(displayP)}
+      <span class="stat-note">p = ${fmtP(r.p)}${empPart}</span>
+    </div>`;
   }).join("");
   return `<div class="result-section">
     <h3>Climate association (stage 08)</h3>

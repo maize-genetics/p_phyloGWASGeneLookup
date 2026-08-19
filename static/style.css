@@ -326,6 +326,12 @@ body {
 
 .envpc-label { font-weight: 600; font-size: 0.9rem; }
 
+.stat-note {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
 .badge {
   display: inline-block;
   padding: 0.1rem 0.5rem;
