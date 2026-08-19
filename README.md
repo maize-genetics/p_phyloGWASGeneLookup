@@ -47,6 +47,11 @@ knowing when reading a result:
   it as a candidate for that trait. **cold/warm**, in contrast, are run genome-wide.
 - Differential-expression evidence is binary (present/absent per stress category across >2
   independent study/species pairs), not a p-value.
+- Significance badges use p < 0.001 as **significant**, 0.001 ≤ p < 0.05 as **marginal**, and
+  p ≥ 0.05 as **not significant** — applied consistently to climate association and RELAX
+  results. The raw p-value is shown alongside the badge on the single-gene detail view; batch
+  search results show only the badge (and, for RELAX, a significant/tested count) to stay
+  scannable — click through to an OG for the exact numbers.
 
 ## Rebuilding the data
 

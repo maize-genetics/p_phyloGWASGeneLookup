@@ -75,9 +75,13 @@ function fmtP(p) {
 
 function sigBadge(p) {
   if (p === null || p === undefined) return '<span class="badge notsig">not tested</span>';
-  return p < 0.05
-    ? '<span class="badge sig">significant</span>'
-    : '<span class="badge notsig">not significant</span>';
+  if (p < 0.001) return '<span class="badge sig">significant</span>';
+  if (p < 0.05) return '<span class="badge marginal">marginal</span>';
+  return '<span class="badge notsig">not significant</span>';
+}
+
+function isSignificant(p) {
+  return p !== null && p !== undefined && p < 0.001;
 }
 
 function directionFromK(k) {
@@ -315,14 +319,30 @@ function renderBatchResults(rawText) {
     return sigBadge(e.emp_p !== null && e.emp_p !== undefined ? e.emp_p : e.p);
   };
 
+  const relaxCell = (entry) => {
+    const relax = entry.molecularEvolution || {};
+    const tested = RELAX_CONDITIONS.filter(({ key }) => relax[key]);
+    if (!tested.length) return '<span class="gated-note">not tested</span>';
+    const sig = tested.filter(({ key }) => isSignificant(relax[key].p));
+    const cls = sig.length ? "sig" : "notsig";
+    return `<span class="badge ${cls}">${sig.length}/${tested.length} significant</span>`;
+  };
+
+  const deCell = (entry) => {
+    const de = entry.deEvidence || {};
+    const present = DE_CATEGORIES.filter((cat) => de[cat]);
+    return present.length ? escapeHtml(present.join(", ")) : "—";
+  };
+
   const rows = rawIds.map((raw) => {
     const r = resolveGeneId(raw);
     if (r.status !== "found") {
       const note = r.status === "unrecognized" ? "unrecognized format" : "no match";
-      return `<tr><td class="mono">${escapeHtml(raw)}</td><td colspan="4" class="gated-note">${note}</td></tr>`;
+      return `<tr><td class="mono">${escapeHtml(raw)}</td><td colspan="6" class="gated-note">${note}</td></tr>`;
     }
     return r.uniqueOGs.map((og) => {
-      const env = (ogResults[og] && ogResults[og].envAssociation) || {};
+      const entry = ogResults[og] || {};
+      const env = entry.envAssociation || {};
       const match = r.matches.find((m) => m.og === og);
       const idCell = match ? geneLinkHtml(match.species, match.id, raw) : escapeHtml(raw);
       return `<tr>
@@ -331,6 +351,8 @@ function renderBatchResults(rawText) {
         <td>${envCell(env, "envPC1")}</td>
         <td>${envCell(env, "envPC2")}</td>
         <td>${envCell(env, "envPC3")}</td>
+        <td>${relaxCell(entry)}</td>
+        <td>${deCell(entry)}</td>
       </tr>`;
     }).join("");
   }).join("");
@@ -338,11 +360,12 @@ function renderBatchResults(rawText) {
   resultEl.innerHTML = `
     <div class="result-card">
       <h2>Batch search results <span class="highconf-badge">${rawIds.length}</span></h2>
-      <p class="gated-note" style="margin-top:0">Climate-association significance per envPC. Click an OG for full details
-        (RELAX and DE evidence included).</p>
+      <p class="gated-note" style="margin-top:0">RELAX = significant / tested conditions (out of cold, warm, and any
+        gated drought/wet/sand/clay tests this OG qualified for). DE evidence = stress categories with consistent
+        differential-expression support. Click an OG for full details.</p>
       <div class="table-scroll">
         <table class="test-table">
-          <thead><tr><th>Gene ID (as entered)</th><th>OG</th><th>envPC1</th><th>envPC2</th><th>envPC3</th></tr></thead>
+          <thead><tr><th>Gene ID (as entered)</th><th>OG</th><th>envPC1</th><th>envPC2</th><th>envPC3</th><th>RELAX</th><th>DE evidence</th></tr></thead>
           <tbody>${rows}</tbody>
         </table>
       </div>
@@ -393,6 +416,17 @@ batchSubmitBtn.addEventListener("click", () => {
     return;
   }
   renderBatchResults(batchInput.value);
+});
+
+document.querySelectorAll(".example-btn").forEach((btn) => {
+  btn.addEventListener("click", () => {
+    input.value = btn.dataset.example;
+    if (!geneIndex) {
+      showMessage("Still loading gene data — try again in a moment.", true);
+      return;
+    }
+    lookup(input.value);
+  });
 });
 
 loadData().catch((err) => {
