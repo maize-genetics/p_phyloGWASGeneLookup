@@ -22,6 +22,29 @@ const RELAX_CONDITIONS = [
 ];
 const DE_CATEGORIES = ["cold", "heat", "drought", "waterlogging"];
 
+// External gene-page builders, verified directly against real IDs from this dataset:
+// - Maize: MaizeGDB's gene_center takes the base gene ID (no transcript suffix).
+// - Rice: Gramene/Ensembl Plants resolves our exact Os...t...-NN transcript ID directly.
+// - Sorghum: our Phytozome-style Sobic.* IDs aren't recognized by Ensembl's direct gene
+//   lookup, only as a synonym via its search — so this links to a search-results page,
+//   not a gene page directly.
+// - Wheat: Ensembl Plants hosts wheat under a version-specific site — our IWGSC RefSeq v2.1
+//   IDs only resolve on "Triticum_aestivum_refseqv2", not the default "Triticum_aestivum"
+//   (which is an older annotation and doesn't recognize these IDs at all).
+const EXTERNAL_LINK_BUILDERS = {
+  maize_v5: (id) => `https://maizegdb.org/gene_center/gene/${encodeURIComponent(id.replace(/_T\d+$/, ""))}`,
+  "rice_IRGSP1.0": (id) => `https://ensembl.gramene.org/Oryza_sativa/Gene/Summary?g=${encodeURIComponent(id)}`,
+  sorghum_v3: (id) => `https://ensembl.gramene.org/Multi/Search/Results?q=${encodeURIComponent(id.replace(/\.\d+$/, ""))};site=ensembl_all`,
+  wheat_v2: (id) => `https://ensembl.gramene.org/Triticum_aestivum_refseqv2/Gene/Summary?g=${encodeURIComponent(id.replace(/\.\d+$/, ""))}`,
+};
+
+function geneLinkHtml(species, id, displayText) {
+  const label = escapeHtml(displayText === undefined ? id : displayText);
+  const build = EXTERNAL_LINK_BUILDERS[species];
+  if (!build) return label;
+  return `<a href="${build(id)}" target="_blank" rel="noopener">${label}</a>`;
+}
+
 let geneIndex = null;
 let ogResults = null;
 // What "back" returns to from a single OG detail view — null when there's nothing to go
@@ -67,7 +90,7 @@ function directionFromK(k) {
 function renderGeneIdList(genes) {
   const items = SPECIES_ORDER.map((sp) => {
     const ids = (genes && genes[sp]) || [];
-    const value = ids.length ? ids.map(escapeHtml).join(", ") : "no ortholog in this orthogroup";
+    const value = ids.length ? ids.map((id) => geneLinkHtml(sp, id)).join(", ") : "no ortholog in this orthogroup";
     return `<span>${SPECIES_LABELS[sp]}: <strong>${value}</strong></span>`;
   });
   return `<div class="gene-id-list">${items.join("")}</div>`;
@@ -183,14 +206,16 @@ function renderCandidateList() {
   const body = rows.map(({ og, entry }) => {
     const hc = entry.highConfidenceCandidate;
     const env = (entry.envAssociation && entry.envAssociation[hc.envPC]) || {};
-    const maize = ((entry.genes && entry.genes.maize_v5) || []).join(", ") || "—";
-    const rice = ((entry.genes && entry.genes["rice_IRGSP1.0"]) || []).join(", ") || "—";
+    const maizeIds = (entry.genes && entry.genes.maize_v5) || [];
+    const riceIds = (entry.genes && entry.genes["rice_IRGSP1.0"]) || [];
+    const maize = maizeIds.length ? maizeIds.map((id) => geneLinkHtml("maize_v5", id)).join(", ") : "—";
+    const rice = riceIds.length ? riceIds.map((id) => geneLinkHtml("rice_IRGSP1.0", id)).join(", ") : "—";
     const de = hc.aprioriDEConditions.length ? hc.aprioriDEConditions.join(", ") : "—";
     return `<tr>
       <td><button type="button" class="link-button" data-og="${escapeHtml(og)}">${escapeHtml(og)}</button></td>
       <td>${escapeHtml(hc.envPC)}</td>
-      <td class="mono">${escapeHtml(maize)}</td>
-      <td class="mono">${escapeHtml(rice)}</td>
+      <td class="mono">${maize}</td>
+      <td class="mono">${rice}</td>
       <td>${fmtP(env.p)}</td>
       <td>${escapeHtml(de)}</td>
     </tr>`;
@@ -298,8 +323,10 @@ function renderBatchResults(rawText) {
     }
     return r.uniqueOGs.map((og) => {
       const env = (ogResults[og] && ogResults[og].envAssociation) || {};
+      const match = r.matches.find((m) => m.og === og);
+      const idCell = match ? geneLinkHtml(match.species, match.id, raw) : escapeHtml(raw);
       return `<tr>
-        <td class="mono">${escapeHtml(raw)}</td>
+        <td class="mono">${idCell}</td>
         <td><button type="button" class="link-button" data-og="${escapeHtml(og)}">${escapeHtml(og)}</button></td>
         <td>${envCell(env, "envPC1")}</td>
         <td>${envCell(env, "envPC2")}</td>
